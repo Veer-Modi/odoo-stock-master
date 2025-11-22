@@ -81,6 +81,7 @@ export default function Signup() {
 
     setLoading(true);
     
+<<<<<<< HEAD
     try {
       const selectedRole = formData.role;
       const response = await authAPI.register({
@@ -123,6 +124,42 @@ export default function Signup() {
     } finally {
       setLoading(false);
     }
+=======
+    // Connect to backend API
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'http://localhost:5000/api/auth/register', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    
+    xhr.onload = function() {
+      setLoading(false);
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status === 201) {
+          localStorage.setItem('stockmaster_auth', 'true');
+          localStorage.setItem('stockmaster_token', data.token);
+          localStorage.setItem('stockmaster_user', JSON.stringify(data.user));
+          setAuth(true);
+          toast.success('Account created successfully!');
+          navigate('/dashboard');
+        } else {
+          toast.error(data.message || 'Failed to create account');
+        }
+      } catch (error) {
+        toast.error('Failed to process response');
+      }
+    };
+    
+    xhr.onerror = function() {
+      setLoading(false);
+      toast.error('Network error. Please check if the server is running.');
+    };
+    
+    xhr.send(JSON.stringify({
+      name: formData.name,
+      email: formData.email,
+      password: formData.password
+    }));
+>>>>>>> 1235704e972f40cdc6f540431150e95a8c2fc8b7
   };
 
   return (

@@ -78,6 +78,7 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     
+<<<<<<< HEAD
     try {
       const result = await login(formData.email, formData.password);
       
@@ -95,6 +96,41 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+=======
+    // Connect to backend API
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'http://localhost:5000/api/auth/login', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    
+    xhr.onload = function() {
+      setLoading(false);
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status === 200) {
+          localStorage.setItem('stockmaster_auth', 'true');
+          localStorage.setItem('stockmaster_token', data.token);
+          localStorage.setItem('stockmaster_user', JSON.stringify(data.user));
+          setAuth(true);
+          toast.success('Login successful!');
+          navigate('/dashboard');
+        } else {
+          toast.error(data.message || 'Login failed');
+        }
+      } catch (error) {
+        toast.error('Failed to process response');
+      }
+    };
+    
+    xhr.onerror = function() {
+      setLoading(false);
+      toast.error('Network error. Please check if the server is running.');
+    };
+    
+    xhr.send(JSON.stringify({
+      email: formData.email,
+      password: formData.password
+    }));
+>>>>>>> 1235704e972f40cdc6f540431150e95a8c2fc8b7
   };
 
   return (

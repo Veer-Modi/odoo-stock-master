@@ -1,0 +1,121 @@
+============================================
+PASSWORD RESET WITH OTP - SETUP INSTRUCTIONS
+============================================
+
+This application now supports password reset functionality using NodeMailer with OTP verification.
+
+PREREQUISITES:
+--------------
+1. Node.js installed
+2. MongoDB installed and running
+3. Gmail account (or any SMTP email service)
+
+SETUP STEPS:
+------------
+
+STEP 1: Install MongoDB (if not installed)
+   - Download from: https://www.mongodb.com/try/download/community
+   - Install and start MongoDB service
+   - Default connection: mongodb://localhost:27017
+
+STEP 2: Configure Email Service
+   For Gmail:
+   a) Go to your Google Account: https://myaccount.google.com
+   b) Enable 2-Step Verification (Security section)
+   c) Generate App Password:
+      - Go to: https://myaccount.google.com/apppasswords
+      - Select "Mail" and your device
+      - Copy the 16-digit password
+   
+   For other email providers:
+   - Use their SMTP settings (host, port, credentials)
+
+STEP 3: Update .env file
+   - Open backend/.env
+   - Replace EMAIL_USER with your email address
+   - Replace EMAIL_PASSWORD with the app password (16 digits, no spaces)
+   - Replace EMAIL_FROM with your desired sender name and email
+
+   Example:
+   EMAIL_USER=yourname@gmail.com
+   EMAIL_PASSWORD=abcd efgh ijkl mnop
+   EMAIL_FROM=StockMaster <yourname@gmail.com>
+
+STEP 4: Start MongoDB
+   Windows: MongoDB service should auto-start
+   Or run: mongod
+   
+   Verify it's running on: mongodb://localhost:27017
+
+STEP 5: Start the Backend Server
+   cd backend
+   npm install (if not done)
+   npm run dev
+   
+   You should see:
+   - "🚀 Server running on port 5000"
+   - "✅ Connected to MongoDB"
+
+STEP 6: Start the Frontend
+   In a new terminal:
+   cd frontend
+   npm start
+
+STEP 7: Test the Password Reset Flow
+   1. First, register a user (if you don't have one)
+   2. Go to Forgot Password page
+   3. Enter your email
+   4. Check your email inbox for the OTP
+   5. Enter the OTP and new password
+   6. Login with the new password
+
+TROUBLESHOOTING:
+----------------
+
+Issue: "Failed to send OTP email"
+Solution: 
+- Check EMAIL_USER and EMAIL_PASSWORD in .env
+- Ensure you're using App Password, not regular password
+- Check your internet connection
+- Check email provider's SMTP settings
+
+Issue: "MongoDB connection error"
+Solution:
+- Ensure MongoDB is running
+- Check if port 27017 is available
+- Verify MONGODB_URI in .env
+
+Issue: "Network error" in frontend
+Solution:
+- Ensure backend server is running on port 5000
+- Check CORS settings in server.js
+- Verify fetch URL: http://localhost:5000
+
+API ENDPOINTS:
+--------------
+POST /api/auth/register - Register new user
+POST /api/auth/login - Login user
+POST /api/auth/forgot-password - Send OTP to email
+POST /api/auth/reset-password - Reset password with OTP
+
+HOW IT WORKS:
+-------------
+1. User enters email on Forgot Password page
+2. Backend generates 6-digit OTP
+3. OTP is saved to database with 10-minute expiry
+4. NodeMailer sends formatted email with OTP
+5. User receives email with OTP code
+6. User enters OTP and new password
+7. Backend verifies OTP and expiry time
+8. Password is updated and OTP is cleared
+9. User can login with new password
+
+SECURITY FEATURES:
+------------------
+- OTP expires after 10 minutes
+- Passwords are hashed using bcrypt
+- JWT tokens for authentication
+- Email validation
+- OTP is single-use (cleared after reset)
+
+For questions or issues, check the console logs in both frontend and backend terminals.
