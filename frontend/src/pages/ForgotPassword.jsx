@@ -18,24 +18,64 @@ export default function ForgotPassword() {
     e.preventDefault();
     setLoading(true);
     
-    // Mock OTP send
-    setTimeout(() => {
-      setOtpSent(true);
-      toast.success('OTP sent to your email! (Mock: 123456)');
+    // Use XMLHttpRequest to bypass browser extension interference
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'http://localhost:5000/api/auth/forgot-password', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    
+    xhr.onload = function() {
       setLoading(false);
-    }, 800);
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status === 200) {
+          setOtpSent(true);
+          toast.success('OTP sent to your email! Please check your inbox.');
+        } else {
+          toast.error(data.message || 'Failed to send OTP');
+        }
+      } catch (error) {
+        toast.error('Failed to process response');
+      }
+    };
+    
+    xhr.onerror = function() {
+      setLoading(false);
+      toast.error('Network error. Please check if the server is running.');
+    };
+    
+    xhr.send(JSON.stringify({ email }));
   };
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
     setLoading(true);
     
-    // Mock password reset
-    setTimeout(() => {
-      setResetComplete(true);
-      toast.success('Password reset successful!');
+    // Use XMLHttpRequest to bypass browser extension interference
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'http://localhost:5000/api/auth/reset-password', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    
+    xhr.onload = function() {
       setLoading(false);
-    }, 800);
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status === 200) {
+          setResetComplete(true);
+          toast.success('Password reset successful!');
+        } else {
+          toast.error(data.message || 'Failed to reset password');
+        }
+      } catch (error) {
+        toast.error('Failed to process response');
+      }
+    };
+    
+    xhr.onerror = function() {
+      setLoading(false);
+      toast.error('Network error. Please try again.');
+    };
+    
+    xhr.send(JSON.stringify({ email, otp, newPassword }));
   };
 
   return (
