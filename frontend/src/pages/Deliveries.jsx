@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Eye, Calendar } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -20,22 +20,59 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { useAuth } from '../contexts/AuthContext';
+import { deliveryAPI, warehouseAPI, productAPI } from '../utils/api';
 
 export default function Deliveries() {
-  const [deliveries, setDeliveries] = useState([
-    { id: 1, ref: 'WH/OUT/0001', date: '12/24/2025', customer: 'John Corp', warehouse: 'Main Warehouse', status: 'Ready', products: 2 },
-    { id: 2, ref: 'WH/OUT/0002', date: '12/23/2025', customer: 'BuildCo', warehouse: 'Rack A', status: 'Ready', products: 3 },
-    { id: 3, ref: 'WH/OUT/0003', date: '12/22/2025', customer: 'TechStart Inc', warehouse: 'Main Warehouse', status: 'Done', products: 1 },
-    { id: 4, ref: 'WH/OUT/0004', date: '12/21/2025', customer: 'Global Solutions', warehouse: 'Storage', status: 'Draft', products: 4 }
-  ]);
+  const { user, hasPermission } = useAuth();
+  const [deliveries, setDeliveries] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     customer: '',
-    warehouse: '',
     date: '',
-    products: [{ product: '', quantity: '' }]
+    warehouseId: '',
+    items: [{ productId: '', quantity: '' }]
   });
+
+  useEffect(() => {
+    loadDeliveries();
+    loadWarehouses();
+    loadProducts();
+  }, []);
+
+  const loadDeliveries = async () => {
+    try {
+      setLoading(true);
+      const response = await deliveryAPI.getAll();
+      setDeliveries(response.data);
+    } catch (error) {
+      toast.error('Failed to load deliveries');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadWarehouses = async () => {
+    try {
+      const response = await warehouseAPI.getAll();
+      setWarehouses(response.data);
+    } catch (error) {
+      // ignore
+    }
+  };
+
+  const loadProducts = async () => {
+    try {
+      const response = await productAPI.getAll();
+      setProducts(response.data);
+    } catch (error) {
+      // ignore
+    }
+  };
 
   const getStatusColor = (status) => {
     const colors = {
@@ -47,21 +84,26 @@ export default function Deliveries() {
     return colors[status] || 'bg-slate-100 text-slate-700';
   };
 
-  const handleCreateDelivery = (e) => {
+  const handleCreateDelivery = async (e) => {
     e.preventDefault();
-    const newDelivery = {
-      id: Date.now(),
-      ref: `WH/OUT/${String(deliveries.length + 1).padStart(4, '0')}`,
-      date: formData.date,
-      customer: formData.customer,
-      warehouse: formData.warehouse,
-      status: 'Draft',
-      products: formData.products.length
-    };
-    setDeliveries([newDelivery, ...deliveries]);
-    toast.success('Delivery order created successfully');
-    setDialogOpen(false);
-    setFormData({ customer: '', warehouse: '', date: '', products: [{ product: '', quantity: '' }] });
+    try {
+      const items = formData.items
+        .filter(item => item.productId && item.quantity)
+        .map(item => ({ productId: item.productId, quantity: parseInt(item.quantity) }));
+
+      await deliveryAPI.create({
+        customer: formData.customer,
+        warehouseId: formData.warehouseId || user?.warehouseId,
+        items,
+      });
+
+      toast.success('Delivery order created successfully');
+      setDialogOpen(false);
+      setFormData({ customer: '', date: '', warehouseId: '', items: [{ productId: '', quantity: '' }] });
+      loadDeliveries();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to create delivery');
+    }
   };
 
   const handleValidate = (delivery) => {
@@ -74,28 +116,28 @@ export default function Deliveries() {
   const addProductRow = () => {
     setFormData({
       ...formData,
-      products: [...formData.products, { product: '', quantity: '' }]
+      items: [...formData.items, { productId: '', quantity: '' }]
     });
   };
 
   return (
-    <div className="space-y-6" data-testid="deliveries-page">
+    <div className="space-y-8" data-testid="deliveries-page">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Deliveries</h2>
-          <p className="text-slate-600 mt-1">Manage outgoing stock to customers</p>
+          <h2 className="text-4xl font-bold text-gradient">Deliveries</h2>
+          <p className="text-slate-500 mt-2 font-medium">Manage outgoing stock to customers</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-purple-600 hover:bg-purple-700" data-testid="new-delivery-button">
+            <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold shadow-lg shadow-purple-500/30 h-11 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/40 rounded-xl" data-testid="new-delivery-button">
               <Plus className="w-5 h-5 mr-2" />
               New Delivery
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border-purple-100/50 bg-gradient-to-br from-white to-purple-50/30">
             <DialogHeader>
-              <DialogTitle>Create New Delivery</DialogTitle>
+              <DialogTitle className="text-2xl font-bold text-gradient">Create New Delivery</DialogTitle>
               <DialogDescription>Record outgoing goods to customer</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleCreateDelivery} className="space-y-4 mt-4">
@@ -125,15 +167,16 @@ export default function Deliveries() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="warehouse">Source Warehouse *</Label>
-                <Select value={formData.warehouse} onValueChange={(val) => setFormData({ ...formData, warehouse: val })}>
+                <Select value={formData.warehouseId || undefined} onValueChange={(val) => setFormData({ ...formData, warehouseId: val })}>
                   <SelectTrigger data-testid="delivery-warehouse-select">
                     <SelectValue placeholder="Select warehouse" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Main Warehouse">Main Warehouse</SelectItem>
-                    <SelectItem value="Rack A">Rack A</SelectItem>
-                    <SelectItem value="Rack B">Rack B</SelectItem>
-                    <SelectItem value="Storage">Storage</SelectItem>
+                    {warehouses.map((w) => (
+                      <SelectItem key={w._id} value={w._id}>
+                        {w.name} ({w.code})
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -144,23 +187,25 @@ export default function Deliveries() {
                     <Plus className="w-4 h-4 mr-1" /> Add Product
                   </Button>
                 </div>
-                {formData.products.map((item, index) => (
+                {formData.items.map((item, index) => (
                   <div key={index} className="grid grid-cols-2 gap-3">
                     <Select
-                      value={item.product}
+                      value={item.productId || undefined}
                       onValueChange={(val) => {
-                        const newProducts = [...formData.products];
-                        newProducts[index].product = val;
-                        setFormData({ ...formData, products: newProducts });
+                        const newItems = [...formData.items];
+                        newItems[index].productId = val;
+                        setFormData({ ...formData, items: newItems });
                       }}
                     >
                       <SelectTrigger data-testid={`delivery-product-select-${index}`}>
                         <SelectValue placeholder="Select product" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="DESK-001">Office Desk</SelectItem>
-                        <SelectItem value="CHAIR-001">Office Chair</SelectItem>
-                        <SelectItem value="BOLT-001">Bolts M10</SelectItem>
+                        {products.map((p) => (
+                          <SelectItem key={p._id} value={p._id}>
+                            {p.name} ({p.sku})
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <Input
@@ -168,9 +213,9 @@ export default function Deliveries() {
                       placeholder="Quantity"
                       value={item.quantity}
                       onChange={(e) => {
-                        const newProducts = [...formData.products];
-                        newProducts[index].quantity = e.target.value;
-                        setFormData({ ...formData, products: newProducts });
+                        const newItems = [...formData.items];
+                        newItems[index].quantity = e.target.value;
+                        setFormData({ ...formData, items: newItems });
                       }}
                       data-testid={`delivery-product-quantity-${index}`}
                     />
@@ -191,13 +236,13 @@ export default function Deliveries() {
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-xl p-4 border border-slate-200">
+      <div className="card-elevated p-6 border-purple-100/50">
         <div className="flex gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <div className="flex-1 relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-purple-500 transition-colors" />
             <Input
               placeholder="Search by reference, customer, or warehouse..."
-              className="pl-10 h-11 bg-slate-50 border-slate-200"
+              className="pl-12 h-11 bg-gradient-to-r from-slate-50 to-purple-50 border-slate-200 rounded-xl focus:border-purple-400 font-medium"
               data-testid="deliveries-search-input"
             />
           </div>
@@ -205,61 +250,70 @@ export default function Deliveries() {
       </div>
 
       {/* Deliveries Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="table-modern">
+        <div className="p-6 border-b border-slate-200/50 bg-gradient-to-r from-slate-50 to-purple-50/30">
+          <h3 className="text-xl font-bold text-slate-900">Delivery Orders</h3>
+          <p className="text-sm text-slate-500 mt-1">{deliveries.length} deliveries total</p>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-50">
+            <thead className="bg-gradient-to-r from-slate-100/50 to-purple-100/30 border-b border-slate-200/50">
               <tr>
-                <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Reference</th>
-                <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Date</th>
-                <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Customer</th>
-                <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Warehouse</th>
-                <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Products</th>
-                <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Status</th>
-                <th className="text-right text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Actions</th>
+                <th className="text-left text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Reference</th>
+                <th className="text-left text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Date</th>
+                <th className="text-left text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Customer</th>
+                <th className="text-left text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Warehouse</th>
+                <th className="text-left text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Products</th>
+                <th className="text-left text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Status</th>
+                <th className="text-right text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-100">
               {deliveries.map((delivery) => (
-                <tr key={delivery.id} className="hover:bg-slate-50 transition-colors" data-testid={`delivery-row-${delivery.ref}`}>
+                <tr key={delivery._id} className="hover:bg-purple-50/50 transition-colors duration-200" data-testid={`delivery-row-${delivery.ref}`}>
                   <td className="px-6 py-4">
-                    <div className="font-medium text-slate-900">{delivery.ref}</div>
+                    <div className="font-bold text-slate-900 bg-purple-50 px-3 py-1 rounded-lg w-fit">{delivery.ref}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-slate-700 flex items-center gap-2">
+                    <div className="text-sm font-medium text-slate-700 flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-slate-400" />
-                      {delivery.date}
+                      {new Date(delivery.createdAt).toLocaleDateString()}
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-slate-700">{delivery.customer}</div>
+                    <div className="text-sm font-medium text-slate-700">{delivery.customer}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-slate-700">{delivery.warehouse}</div>
+                    <div className="text-sm text-slate-700">{delivery.warehouseId?.name}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-slate-600">{delivery.products} items</div>
+                    <div className="text-sm font-semibold text-slate-900">{delivery.items?.length || 0} items</div>
                   </td>
                   <td className="px-6 py-4">
-                    <Badge className={`${getStatusColor(delivery.status)} border-0`} data-testid={`delivery-status-${delivery.ref}`}>
+                    <Badge className={`${getStatusColor(delivery.status)} border-0 font-semibold`} data-testid={`delivery-status-${delivery.ref}`}>
                       {delivery.status}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {delivery.status === 'Ready' && (
+                      {delivery.status === 'Packed' && hasPermission('VALIDATE_DELIVERIES') && (
                         <Button
                           size="sm"
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
-                          onClick={() => handleValidate(delivery)}
+                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium"
+                          onClick={async () => {
+                            try {
+                              await deliveryAPI.validate(delivery._id);
+                              toast.success('Delivery validated');
+                              loadDeliveries();
+                            } catch (error) {
+                              toast.error(error.response?.data?.message || 'Failed to validate delivery');
+                            }
+                          }}
                           data-testid={`validate-delivery-${delivery.ref}`}
                         >
                           Validate
                         </Button>
                       )}
-                      <Button variant="ghost" size="sm" className="text-slate-600 hover:text-slate-900" data-testid={`view-delivery-${delivery.ref}`}>
-                        <Eye className="w-4 h-4" />
-                      </Button>
                     </div>
                   </td>
                 </tr>

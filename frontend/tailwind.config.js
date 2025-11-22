@@ -2,8 +2,8 @@
 module.exports = {
     darkMode: ["class"],
     content: [
+    "./index.html",
     "./src/**/*.{js,jsx,ts,tsx}",
-    "./public/index.html"
   ],
   theme: {
   	extend: {
@@ -74,7 +74,9 @@ module.exports = {
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
+  			'accordion-up': 'accordion-up 0.2s ease-out',
+  			'fade-in': 'fade-in 0.3s ease-in-out',
+  			'slide-up': 'slide-up 0.4s ease-out'
   		}
   	}
   },

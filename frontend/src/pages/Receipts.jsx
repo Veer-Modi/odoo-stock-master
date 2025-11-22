@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Eye, Calendar } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -20,24 +20,61 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { useAuth } from '../contexts/AuthContext';
+import { receiptAPI, warehouseAPI, productAPI } from '../utils/api';
 
 export default function Receipts() {
-  const [receipts, setReceipts] = useState([
-    { id: 1, ref: 'WH/IN/0001', date: '12/24/2025', supplier: 'Acme Supplier', warehouse: 'Main Warehouse', status: 'Ready', products: 3 },
-    { id: 2, ref: 'WH/IN/0002', date: '12/23/2025', supplier: 'Steel Works', warehouse: 'Main Warehouse', status: 'Draft', products: 1 },
-    { id: 3, ref: 'WH/IN/0003', date: '12/22/2025', supplier: 'Hardware Inc', warehouse: 'Rack B', status: 'Done', products: 5 },
-    { id: 4, ref: 'WH/IN/0004', date: '12/21/2025', supplier: 'Paint Co', warehouse: 'Storage', status: 'Ready', products: 2 }
-  ]);
+  const { user, hasPermission } = useAuth();
+  const [receipts, setReceipts] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [formData, setFormData] = useState({
     supplier: '',
-    warehouse: '',
     date: '',
-    products: [{ product: '', quantity: '' }]
+    warehouseId: '',
+    items: [{ productId: '', quantity: '' }]
   });
+
+  useEffect(() => {
+    loadReceipts();
+    loadWarehouses();
+    loadProducts();
+  }, []);
+
+  const loadReceipts = async () => {
+    try {
+      setLoading(true);
+      const response = await receiptAPI.getAll();
+      setReceipts(response.data);
+    } catch (error) {
+      toast.error('Failed to load receipts');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadWarehouses = async () => {
+    try {
+      const response = await warehouseAPI.getAll();
+      setWarehouses(response.data);
+    } catch (error) {
+      // ignore
+    }
+  };
+
+  const loadProducts = async () => {
+    try {
+      const response = await productAPI.getAll();
+      setProducts(response.data);
+    } catch (error) {
+      // ignore
+    }
+  };
 
   const getStatusColor = (status) => {
     const colors = {
@@ -49,21 +86,26 @@ export default function Receipts() {
     return colors[status] || 'bg-slate-100 text-slate-700';
   };
 
-  const handleCreateReceipt = (e) => {
+  const handleCreateReceipt = async (e) => {
     e.preventDefault();
-    const newReceipt = {
-      id: Date.now(),
-      ref: `WH/IN/${String(receipts.length + 1).padStart(4, '0')}`,
-      date: formData.date,
-      supplier: formData.supplier,
-      warehouse: formData.warehouse,
-      status: 'Draft',
-      products: formData.products.length
-    };
-    setReceipts([newReceipt, ...receipts]);
-    toast.success('Receipt created successfully');
-    setDialogOpen(false);
-    setFormData({ supplier: '', warehouse: '', date: '', products: [{ product: '', quantity: '' }] });
+    try {
+      const items = formData.items
+        .filter(item => item.productId && item.quantity)
+        .map(item => ({ productId: item.productId, quantity: parseInt(item.quantity) }));
+
+      await receiptAPI.create({
+        supplier: formData.supplier,
+        warehouseId: formData.warehouseId || user?.warehouseId,
+        items,
+      });
+
+      toast.success('Receipt created successfully');
+      setDialogOpen(false);
+      setFormData({ supplier: '', date: '', warehouseId: '', items: [{ productId: '', quantity: '' }] });
+      loadReceipts();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to create receipt');
+    }
   };
 
   const handleValidate = (receipt) => {
@@ -76,28 +118,28 @@ export default function Receipts() {
   const addProductRow = () => {
     setFormData({
       ...formData,
-      products: [...formData.products, { product: '', quantity: '' }]
+      items: [...formData.items, { productId: '', quantity: '' }]
     });
   };
 
   return (
-    <div className="space-y-6" data-testid="receipts-page">
+    <div className="space-y-8" data-testid="receipts-page">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Receipts</h2>
-          <p className="text-slate-600 mt-1">Manage incoming stock from suppliers</p>
+          <h2 className="text-4xl font-bold text-gradient">Receipts</h2>
+          <p className="text-slate-500 mt-2 font-medium">Manage incoming stock from suppliers</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-green-600 hover:bg-green-700" data-testid="new-receipt-button">
+            <Button className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold shadow-lg shadow-green-500/30 h-11 transition-all duration-300 hover:shadow-xl hover:shadow-green-500/40 rounded-xl" data-testid="new-receipt-button">
               <Plus className="w-5 h-5 mr-2" />
               New Receipt
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border-green-100/50 bg-gradient-to-br from-white to-green-50/30">
             <DialogHeader>
-              <DialogTitle>Create New Receipt</DialogTitle>
+              <DialogTitle className="text-2xl font-bold text-gradient">Create New Receipt</DialogTitle>
               <DialogDescription>Record incoming goods from supplier</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleCreateReceipt} className="space-y-4 mt-4">
@@ -127,15 +169,16 @@ export default function Receipts() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="warehouse">Destination Warehouse *</Label>
-                <Select value={formData.warehouse} onValueChange={(val) => setFormData({ ...formData, warehouse: val })}>
+                <Select value={formData.warehouseId || undefined} onValueChange={(val) => setFormData({ ...formData, warehouseId: val })}>
                   <SelectTrigger data-testid="receipt-warehouse-select">
                     <SelectValue placeholder="Select warehouse" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Main Warehouse">Main Warehouse</SelectItem>
-                    <SelectItem value="Rack A">Rack A</SelectItem>
-                    <SelectItem value="Rack B">Rack B</SelectItem>
-                    <SelectItem value="Storage">Storage</SelectItem>
+                    {warehouses.map((w) => (
+                      <SelectItem key={w._id} value={w._id}>
+                        {w.name} ({w.code})
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -146,23 +189,25 @@ export default function Receipts() {
                     <Plus className="w-4 h-4 mr-1" /> Add Product
                   </Button>
                 </div>
-                {formData.products.map((item, index) => (
+                {formData.items.map((item, index) => (
                   <div key={index} className="grid grid-cols-2 gap-3">
                     <Select
-                      value={item.product}
+                      value={item.productId || undefined}
                       onValueChange={(val) => {
-                        const newProducts = [...formData.products];
-                        newProducts[index].product = val;
-                        setFormData({ ...formData, products: newProducts });
+                        const newItems = [...formData.items];
+                        newItems[index].productId = val;
+                        setFormData({ ...formData, items: newItems });
                       }}
                     >
                       <SelectTrigger data-testid={`product-select-${index}`}>
                         <SelectValue placeholder="Select product" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="STEEL-001">Steel Rods</SelectItem>
-                        <SelectItem value="DESK-001">Office Desk</SelectItem>
-                        <SelectItem value="BOLT-001">Bolts M10</SelectItem>
+                        {products.map((p) => (
+                          <SelectItem key={p._id} value={p._id}>
+                            {p.name} ({p.sku})
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <Input
@@ -170,9 +215,9 @@ export default function Receipts() {
                       placeholder="Quantity"
                       value={item.quantity}
                       onChange={(e) => {
-                        const newProducts = [...formData.products];
-                        newProducts[index].quantity = e.target.value;
-                        setFormData({ ...formData, products: newProducts });
+                        const newItems = [...formData.items];
+                        newItems[index].quantity = e.target.value;
+                        setFormData({ ...formData, items: newItems });
                       }}
                       data-testid={`product-quantity-${index}`}
                     />
@@ -193,13 +238,13 @@ export default function Receipts() {
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-xl p-4 border border-slate-200">
+      <div className="card-elevated p-6 border-green-100/50">
         <div className="flex gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <div className="flex-1 relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-green-500 transition-colors" />
             <Input
               placeholder="Search by reference, supplier, or warehouse..."
-              className="pl-10 h-11 bg-slate-50 border-slate-200"
+              className="pl-12 h-11 bg-gradient-to-r from-slate-50 to-green-50 border-slate-200 rounded-xl focus:border-green-400 font-medium"
               data-testid="receipts-search-input"
             />
           </div>
@@ -207,61 +252,70 @@ export default function Receipts() {
       </div>
 
       {/* Receipts Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="table-modern">
+        <div className="p-6 border-b border-slate-200/50 bg-gradient-to-r from-slate-50 to-green-50/30">
+          <h3 className="text-xl font-bold text-slate-900">Receipt List</h3>
+          <p className="text-sm text-slate-500 mt-1">{receipts.length} receipts total</p>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-50">
+            <thead className="bg-gradient-to-r from-slate-100/50 to-green-100/30 border-b border-slate-200/50">
               <tr>
-                <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Reference</th>
-                <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Date</th>
-                <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Supplier</th>
-                <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Warehouse</th>
-                <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Products</th>
-                <th className="text-left text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Status</th>
-                <th className="text-right text-xs font-semibold text-slate-600 uppercase tracking-wider px-6 py-4">Actions</th>
+                <th className="text-left text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Reference</th>
+                <th className="text-left text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Date</th>
+                <th className="text-left text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Supplier</th>
+                <th className="text-left text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Warehouse</th>
+                <th className="text-left text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Products</th>
+                <th className="text-left text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Status</th>
+                <th className="text-right text-xs font-bold text-slate-700 uppercase tracking-widest px-6 py-4">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-100">
               {receipts.map((receipt) => (
-                <tr key={receipt.id} className="hover:bg-slate-50 transition-colors" data-testid={`receipt-row-${receipt.ref}`}>
+                <tr key={receipt._id} className="hover:bg-green-50/50 transition-colors duration-200" data-testid={`receipt-row-${receipt.ref}`}>
                   <td className="px-6 py-4">
-                    <div className="font-medium text-slate-900">{receipt.ref}</div>
+                    <div className="font-bold text-slate-900 bg-green-50 px-3 py-1 rounded-lg w-fit">{receipt.ref}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-slate-700 flex items-center gap-2">
+                    <div className="text-sm font-medium text-slate-700 flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-slate-400" />
-                      {receipt.date}
+                      {new Date(receipt.createdAt).toLocaleDateString()}
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-slate-700">{receipt.supplier}</div>
+                    <div className="text-sm font-medium text-slate-700">{receipt.supplier}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-slate-700">{receipt.warehouse}</div>
+                    <div className="text-sm text-slate-700">{receipt.warehouseId?.name}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-slate-600">{receipt.products} items</div>
+                    <div className="text-sm font-semibold text-slate-900">{receipt.items?.length || 0} items</div>
                   </td>
                   <td className="px-6 py-4">
-                    <Badge className={`${getStatusColor(receipt.status)} border-0`} data-testid={`receipt-status-${receipt.ref}`}>
+                    <Badge className={`${getStatusColor(receipt.status)} border-0 font-semibold`} data-testid={`receipt-status-${receipt.ref}`}>
                       {receipt.status}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {receipt.status === 'Ready' && (
+                      {receipt.status === 'Draft' && hasPermission('VALIDATE_RECEIPTS') && (
                         <Button
                           size="sm"
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
-                          onClick={() => handleValidate(receipt)}
+                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium"
+                          onClick={async () => {
+                            try {
+                              await receiptAPI.validate(receipt._id);
+                              toast.success('Receipt validated');
+                              loadReceipts();
+                            } catch (error) {
+                              toast.error(error.response?.data?.message || 'Failed to validate receipt');
+                            }
+                          }}
                           data-testid={`validate-receipt-${receipt.ref}`}
                         >
                           Validate
                         </Button>
                       )}
-                      <Button variant="ghost" size="sm" className="text-slate-600 hover:text-slate-900" data-testid={`view-receipt-${receipt.ref}`}>
-                        <Eye className="w-4 h-4" />
-                      </Button>
                     </div>
                   </td>
                 </tr>
